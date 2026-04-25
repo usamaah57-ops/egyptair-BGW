@@ -1,12 +1,11 @@
 import streamlit as st
 import sqlite3
 from datetime import datetime
-from fpdf import FPDF
-from io import BytesIO
 
 DB_FILE = "flight_data.db"
 
-# --- Initialize Database ---
+# -------------------- DATABASE --------------------
+
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -91,70 +90,41 @@ def load_archive():
     return rows
 
 
-def generate_pdf(flight, reg, staff, services_dict):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "Baghdad Station Operations Report", ln=True, align="C")
+# -------------------- INIT --------------------
 
-    pdf.ln(5)
-    pdf.set_font("Arial", "", 12)
-    pdf.cell(0, 8, f"Flight: {flight}", ln=True)
-    pdf.cell(0, 8, f"Registration: {reg}", ln=True)
-    pdf.cell(0, 8, f"Staff: {staff}", ln=True)
-    pdf.cell(0, 8, f"Date: {datetime.now().strftime('%d/%m/%Y')}", ln=True)
-
-    pdf.ln(5)
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(60, 8, "Service", border=1)
-    pdf.cell(40, 8, "Time", border=1)
-    pdf.cell(80, 8, "Recorded by", border=1, ln=True)
-
-    pdf.set_font("Arial", "", 11)
-    for key, v in services_dict.items():
-        pdf.cell(60, 8, key, border=1)
-        pdf.cell(40, 8, v["time"], border=1)
-        pdf.cell(80, 8, v["staff"], border=1, ln=True)
-
-    buffer = BytesIO()
-    pdf.output(buffer)
-    buffer.seek(0)
-    return buffer
-
-
-# --- Initialize DB ---
 init_db()
 
-# --- Page Settings ---
 st.set_page_config(page_title="Baghdad Station Operations", page_icon="✈️", layout="centered")
 
-# --- Simple styling ---
+# -------------------- BACKGROUND --------------------
+
 st.markdown(
     """
     <style>
-    .main {
-        background-color: #f5f7fb;
+    .stApp {
+        background-image: url("bg.jpg");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
     }
-    .block-container {
-        padding-top: 1.5rem;
-        padding-bottom: 1.5rem;
+
+    .main, .block-container {
+        background: rgba(255, 255, 255, 0.82);
+        padding: 20px;
+        border-radius: 12px;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# --- Sidebar Navigation ---
-page = st.sidebar.radio("Navigation", ["Operations", "Archive"])
+# -------------------- UI --------------------
 
-# --- Header with logo ---
-col_logo, col_title = st.columns([1, 3])
-with col_logo:
-    st.image("egyptair_plane.jpg.webp", use_column_width=True)
-with col_title:
-    st.title("✈️ Baghdad Station Operations")
+st.title("✈️ Baghdad Station Operations")
+st.subheader("EGYPTAIR")
 
-# --- Staff Session ---
+# Staff login
 if 'staff_confirmed' not in st.session_state:
     st.session_state.staff_confirmed = False
 
@@ -174,82 +144,66 @@ if not st.session_state.staff_confirmed:
 
 st.write(f"👷 Current Staff: **{st.session_state.current_staff}**")
 
-# --- Operations Page ---
-if page == "Operations":
-    flight = st.text_input("Flight Number", value="MS616").upper()
-    reg = st.text_input("Registration (Reg)", value="SU-").upper()
+# Flight info
+flight = st.text_input("Flight Number", value="MS616").upper()
+reg = st.text_input("Registration (Reg)", value="SU-").upper()
 
-    st.divider()
+st.divider()
 
-    services_labels = [
-        ("⏱ Chocks ON", "CHOCKS_ON"), ("⚡ GPU Arrival", "GPU_ARRIVAL"),
-        ("🔌 APU Start", "APU_START"), ("🛠 Air Starter", "AIR_STARTER"),
-        ("📦 FWD Open", "FWD_OPEN"), ("📦 FWD Close", "FWD_CLOSE"),
-        ("📦 AFT Open", "AFT_OPEN"), ("📦 AFT Close", "AFT_CLOSE"),
-        ("🚛 Fuel Arrival", "FUEL_ARRIVAL"), ("⛽ Fuel End", "FUEL_END"),
-        ("🧹 Cleaning START", "CLEANING_START"), ("✨ Cleaning END", "CLEANING_END"),
-        ("🚶 First Pax", "FIRST_PAX"), ("🏁 Last Pax", "LAST_PAX"),
-        ("📑 Loadsheet", "LOADSHEET"), ("🚪 Close Door", "CLOSE_DOOR"),
-        ("🚜 Pushback Truck", "PUSHBACK_TRUCK"), ("🚀 Push Back", "PUSH_BACK")
-    ]
+# -------------------- SERVICES --------------------
 
-    current_shared_times = load_services()
-    cols = st.columns(2)
+services_labels = [
+    ("⏱ Chocks ON", "CHOCKS_ON"), ("⚡ GPU Arrival", "GPU_ARRIVAL"),
+    ("🔌 APU Start", "APU_START"), ("🛠 Air Starter", "AIR_STARTER"),
+    ("📦 FWD Open", "FWD_OPEN"), ("📦 FWD Close", "FWD_CLOSE"),
+    ("📦 AFT Open", "AFT_OPEN"), ("📦 AFT Close", "AFT_CLOSE"),
+    ("🚛 Fuel Arrival", "FUEL_ARRIVAL"), ("⛽ Fuel End", "FUEL_END"),
+    ("🧹 Cleaning START", "CLEANING_START"), ("✨ Cleaning END", "CLEANING_END"),
+    ("🚶 First Pax", "FIRST_PAX"), ("🏁 Last Pax", "LAST_PAX"),
+    ("📑 Loadsheet", "LOADSHEET"), ("🚪 Close Door", "CLOSE_DOOR"),
+    ("🚜 Pushback Truck", "PUSHBACK_TRUCK"), ("🚀 Push Back", "PUSH_BACK")
+]
 
-    for i, (label, key) in enumerate(services_labels):
-        if key in current_shared_times:
-            recorded = current_shared_times[key]
-            cols[i % 2].success(f"{label}\n{recorded['time']} ({recorded['staff']})")
-        else:
-            if cols[i % 2].button(label, key=key, use_container_width=True):
-                now_t = datetime.now().strftime("%H:%M")
-                save_service(key, now_t, st.session_state.current_staff)
-                st.rerun()
+current_shared_times = load_services()
+cols = st.columns(2)
 
-    st.divider()
-
-    # PDF + Archive row
-    col_pdf, col_archive = st.columns(2)
-
-    with col_pdf:
-        if current_shared_times:
-            pdf_buffer = generate_pdf(flight, reg, st.session_state.current_staff, current_shared_times)
-            st.download_button(
-                label="📄 Download PDF Report",
-                data=pdf_buffer,
-                file_name=f"{flight}_{reg}_report.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
-        else:
-            st.info("No data yet to generate PDF.")
-
-    with col_archive:
-        if st.button("📧 Send Final Report and Archive Data", type="primary", use_container_width=True):
-            if not current_shared_times:
-                st.warning("⚠️ No data available!")
-            else:
-                ok = archive_services(flight, reg)
-                if ok:
-                    clear_services()
-                    st.success("✅ Report archived successfully.")
-                    st.balloons()
-                    st.rerun()
-
-# --- Archive Page ---
-if page == "Archive":
-    st.subheader("📂 Archived Reports")
-
-    archive = load_archive()
-
-    if archive:
-        # Group by flight/reg/date
-        st.write("Latest archived records:")
-        for row in archive[:50]:
-            st.write(
-                f"Flight {row[0]} | Reg {row[1]} | Date {row[2]} | "
-                f"{row[3]} at {row[4]} by {row[5]}"
-            )
+for i, (label, key) in enumerate(services_labels):
+    if key in current_shared_times:
+        recorded = current_shared_times[key]
+        cols[i % 2].success(f"{label}\n{recorded['time']} ({recorded['staff']})")
     else:
-        st.info("No archived reports yet.")
+        if cols[i % 2].button(label, key=key, use_container_width=True):
+            now_t = datetime.now().strftime("%H:%M")
+            save_service(key, now_t, st.session_state.current_staff)
+            st.rerun()
 
+st.divider()
+
+# -------------------- FINAL REPORT --------------------
+
+if st.button("📧 Send Final Report and Archive Data", type="primary", use_container_width=True):
+    if not current_shared_times:
+        st.warning("⚠️ No data available!")
+    else:
+        ok = archive_services(flight, reg)
+        if ok:
+            clear_services()
+            st.success("✅ Report archived successfully.")
+            st.balloons()
+            st.rerun()
+
+# -------------------- ARCHIVE --------------------
+
+st.divider()
+st.subheader("📂 Archived Reports")
+
+archive = load_archive()
+
+if archive:
+    for row in archive[:50]:
+        st.write(
+            f"Flight {row[0]} | Reg {row[1]} | Date {row[2]} | "
+            f"{row[3]} at {row[4]} by {row[5]}"
+        )
+else:
+    st.info("No archived reports yet.")
